@@ -822,6 +822,121 @@
             background: var(--audio-color);
         }
 
+        /* Dynamic Report Controls */
+        .report-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+            padding: 25px;
+            background: var(--background);
+            border-radius: var(--radius);
+            border: 1px solid var(--border-color);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .report-select {
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            font-size: 0.938rem;
+            font-family: inherit;
+            background: var(--card-bg);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .report-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .report-select:hover {
+            border-color: var(--primary-hover);
+        }
+
+        #dynamic-report-container {
+            min-height: 200px;
+        }
+
+        .report-matrix {
+            margin-top: 20px;
+        }
+
+        .report-matrix-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--primary-color);
+        }
+
+        .matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .matrix-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+
+        .matrix-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.875rem;
+        }
+
+        .matrix-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .matrix-table tr:hover {
+            background: var(--background);
+        }
+
+        .matrix-table .row-header {
+            font-weight: 600;
+            color: var(--text-primary);
+            background: var(--background);
+        }
+
+        .matrix-table .count-cell {
+            text-align: center;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .matrix-table .total-row {
+            background: var(--background);
+            font-weight: 700;
+        }
+
+        .single-dimension-report {
+            margin-top: 20px;
+        }
+
         /* Empty State */
         .empty-state {
             text-align: center;
@@ -1080,31 +1195,44 @@
 
     <!-- Reports Modal -->
     <div id="reports-modal" class="modal">
-        <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-content" style="max-width: 900px;">
             <div class="modal-header">
-                <h2>📊 Reading Reports</h2>
+                <h2>📊 Dynamic Reading Reports</h2>
             </div>
             <div class="modal-body">
-                <div class="reports-container">
-                    <div class="report-section">
-                        <h3>By Format</h3>
-                        <div id="format-report"></div>
+                <div class="report-controls">
+                    <div class="control-group">
+                        <label class="control-label">Primary Dimension</label>
+                        <select id="primary-dimension" class="report-select" onchange="generateDynamicReport()">
+                            <option value="format">Format</option>
+                            <option value="genre">Genre</option>
+                            <option value="year">Year</option>
+                            <option value="month">Month</option>
+                        </select>
                     </div>
-                    <div class="report-section">
-                        <h3>By Genre</h3>
-                        <div id="genre-report"></div>
+                    <div class="control-group">
+                        <label class="control-label">Secondary Dimension (optional)</label>
+                        <select id="secondary-dimension" class="report-select" onchange="generateDynamicReport()">
+                            <option value="none">None - Single Dimension</option>
+                            <option value="format">Format</option>
+                            <option value="genre">Genre</option>
+                            <option value="year">Year</option>
+                            <option value="month">Month</option>
+                        </select>
                     </div>
-                    <div class="report-section">
-                        <h3>By Year</h3>
-                        <div id="year-report"></div>
-                    </div>
-                    <div class="report-section">
-                        <h3>By Month</h3>
-                        <div id="month-report"></div>
+                    <div class="control-group">
+                        <label class="control-label">Filter by Status</label>
+                        <select id="report-status-filter" class="report-select" onchange="generateDynamicReport()">
+                            <option value="all">All Books</option>
+                            <option value="read">Read Only</option>
+                            <option value="planned">Planned Only</option>
+                        </select>
                     </div>
                 </div>
+                <div id="dynamic-report-container"></div>
             </div>
             <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="exportReportData()">💾 Export Report</button>
                 <button type="button" class="btn btn-primary" onclick="closeReportsModal()">Close</button>
             </div>
         </div>
@@ -1485,7 +1613,7 @@
         }
 
         function openReportsModal() {
-            generateReports();
+            generateDynamicReport();
             document.getElementById('reports-modal').classList.add('active');
         }
 
@@ -1493,6 +1621,274 @@
             document.getElementById('reports-modal').classList.remove('active');
         }
 
+        function generateDynamicReport() {
+            const primary = document.getElementById('primary-dimension').value;
+            const secondary = document.getElementById('secondary-dimension').value;
+            const statusFilter = document.getElementById('report-status-filter').value;
+
+            // Filter books by status
+            const filteredBooks = books.filter(book => {
+                if (statusFilter === 'all') return true;
+                return book.status === statusFilter;
+            });
+
+            const container = document.getElementById('dynamic-report-container');
+
+            if (filteredBooks.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📊</div>
+                        <h3>No data to display</h3>
+                        <p>Add some books to see reports!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            if (secondary === 'none') {
+                // Single dimension report
+                renderSingleDimensionReport(filteredBooks, primary, container);
+            } else if (primary === secondary) {
+                // Same dimension selected for both
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                        <p>Please select different dimensions for primary and secondary analysis.</p>
+                    </div>
+                `;
+            } else {
+                // Multi-dimensional report
+                renderMultiDimensionReport(filteredBooks, primary, secondary, container);
+            }
+        }
+
+        function renderSingleDimensionReport(books, dimension, container) {
+            const stats = {};
+            const dimensionLabels = {
+                format: { physical: 'Physical', electronic: 'Electronic', audio: 'Audio' },
+                genre: {},
+                year: {},
+                month: {}
+            };
+
+            // Collect data
+            books.forEach(book => {
+                let key;
+                switch(dimension) {
+                    case 'format':
+                        key = book.format;
+                        break;
+                    case 'genre':
+                        key = book.genre || 'Unknown';
+                        break;
+                    case 'year':
+                        key = book.dateRead.substring(0, 4);
+                        break;
+                    case 'month':
+                        key = formatMonthYear(book.dateRead);
+                        break;
+                }
+                stats[key] = (stats[key] || 0) + 1;
+            });
+
+            // Sort data
+            let sortedStats;
+            if (dimension === 'format') {
+                sortedStats = [['physical', stats.physical || 0], ['electronic', stats.electronic || 0], ['audio', stats.audio || 0]];
+            } else if (dimension === 'year' || dimension === 'month') {
+                sortedStats = Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
+            } else {
+                sortedStats = Object.entries(stats).sort((a, b) => b[1] - a[1]);
+            }
+
+            const total = books.length;
+            const title = dimension.charAt(0).toUpperCase() + dimension.slice(1);
+
+            let html = `
+                <div class="single-dimension-report">
+                    <div class="report-section">
+                        <h3>Books by ${title}</h3>
+                        <div class="report-bars">
+            `;
+
+            sortedStats.forEach(([key, count]) => {
+                const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+                const label = dimension === 'format' ? dimensionLabels.format[key] : key;
+
+                html += `
+                    <div class="report-item">
+                        <div class="report-label">
+                            <span class="report-genre-name">${escapeHtml(label)}</span>
+                            <span class="report-count">${count} book${count !== 1 ? 's' : ''} (${percentage}%)</span>
+                        </div>
+                        <div class="report-bar-container">
+                            <div class="report-bar ${dimension === 'format' ? key : ''}" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        function renderMultiDimensionReport(books, primary, secondary, container) {
+            // Create a matrix of data
+            const matrix = {};
+            const primaryKeys = new Set();
+            const secondaryKeys = new Set();
+
+            const getDimensionValue = (book, dimension) => {
+                switch(dimension) {
+                    case 'format':
+                        return book.format;
+                    case 'genre':
+                        return book.genre || 'Unknown';
+                    case 'year':
+                        return book.dateRead.substring(0, 4);
+                    case 'month':
+                        return formatMonthYear(book.dateRead);
+                }
+            };
+
+            const getDimensionLabel = (dimension, value) => {
+                if (dimension === 'format') {
+                    const labels = { physical: 'Physical', electronic: 'Electronic', audio: 'Audio' };
+                    return labels[value];
+                }
+                return value;
+            };
+
+            // Collect data
+            books.forEach(book => {
+                const primaryValue = getDimensionValue(book, primary);
+                const secondaryValue = getDimensionValue(book, secondary);
+
+                primaryKeys.add(primaryValue);
+                secondaryKeys.add(secondaryValue);
+
+                if (!matrix[primaryValue]) {
+                    matrix[primaryValue] = {};
+                }
+                matrix[primaryValue][secondaryValue] = (matrix[primaryValue][secondaryValue] || 0) + 1;
+            });
+
+            // Sort keys
+            let sortedPrimaryKeys, sortedSecondaryKeys;
+
+            if (primary === 'format') {
+                sortedPrimaryKeys = ['physical', 'electronic', 'audio'].filter(k => primaryKeys.has(k));
+            } else if (primary === 'year' || primary === 'month') {
+                sortedPrimaryKeys = Array.from(primaryKeys).sort().reverse();
+            } else {
+                sortedPrimaryKeys = Array.from(primaryKeys).sort();
+            }
+
+            if (secondary === 'format') {
+                sortedSecondaryKeys = ['physical', 'electronic', 'audio'].filter(k => secondaryKeys.has(k));
+            } else if (secondary === 'year' || secondary === 'month') {
+                sortedSecondaryKeys = Array.from(secondaryKeys).sort().reverse();
+            } else {
+                sortedSecondaryKeys = Array.from(secondaryKeys).sort();
+            }
+
+            const primaryTitle = primary.charAt(0).toUpperCase() + primary.slice(1);
+            const secondaryTitle = secondary.charAt(0).toUpperCase() + secondary.slice(1);
+
+            // Build table
+            let html = `
+                <div class="report-matrix">
+                    <div class="report-matrix-title">Books by ${primaryTitle} × ${secondaryTitle}</div>
+                    <div style="overflow-x: auto;">
+                        <table class="matrix-table">
+                            <thead>
+                                <tr>
+                                    <th>${primaryTitle} \ ${secondaryTitle}</th>
+            `;
+
+            sortedSecondaryKeys.forEach(key => {
+                html += `<th>${escapeHtml(getDimensionLabel(secondary, key))}</th>`;
+            });
+            html += `<th>Total</th></tr></thead><tbody>`;
+
+            // Data rows
+            const columnTotals = {};
+            let grandTotal = 0;
+
+            sortedPrimaryKeys.forEach(primaryKey => {
+                let rowTotal = 0;
+                html += `<tr><td class="row-header">${escapeHtml(getDimensionLabel(primary, primaryKey))}</td>`;
+
+                sortedSecondaryKeys.forEach(secondaryKey => {
+                    const count = (matrix[primaryKey] && matrix[primaryKey][secondaryKey]) || 0;
+                    html += `<td class="count-cell">${count || '-'}</td>`;
+                    rowTotal += count;
+                    columnTotals[secondaryKey] = (columnTotals[secondaryKey] || 0) + count;
+                });
+
+                html += `<td class="count-cell"><strong>${rowTotal}</strong></td></tr>`;
+                grandTotal += rowTotal;
+            });
+
+            // Totals row
+            html += `<tr class="total-row"><td>Total</td>`;
+            sortedSecondaryKeys.forEach(key => {
+                html += `<td class="count-cell"><strong>${columnTotals[key] || 0}</strong></td>`;
+            });
+            html += `<td class="count-cell"><strong>${grandTotal}</strong></td></tr>`;
+
+            html += `</tbody></table></div></div>`;
+
+            container.innerHTML = html;
+        }
+
+        function exportReportData() {
+            const primary = document.getElementById('primary-dimension').value;
+            const secondary = document.getElementById('secondary-dimension').value;
+            const statusFilter = document.getElementById('report-status-filter').value;
+
+            const filteredBooks = books.filter(book => {
+                if (statusFilter === 'all') return true;
+                return book.status === statusFilter;
+            });
+
+            if (filteredBooks.length === 0) {
+                alert('No data to export!');
+                return;
+            }
+
+            const reportData = {
+                generatedAt: new Date().toISOString(),
+                filters: {
+                    primaryDimension: primary,
+                    secondaryDimension: secondary,
+                    statusFilter: statusFilter
+                },
+                totalBooks: filteredBooks.length,
+                books: filteredBooks
+            };
+
+            const dataStr = JSON.stringify(reportData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+
+            const downloadLink = document.createElement('a');
+            downloadLink.href = URL.createObjectURL(dataBlob);
+
+            const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            downloadLink.download = `book-report-${timestamp}.json`;
+
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+
+            alert(`Report exported successfully!\n\nFile: book-report-${timestamp}.json`);
+        }
+
+        // Keep old function for backwards compatibility but it's not used anymore
         function generateReports() {
             // Calculate format statistics
             const formatStats = {
