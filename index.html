@@ -1153,7 +1153,7 @@
                     <option value="title">By Title</option>
                     <option value="author">By Author</option>
                 </select>
-                <button class="bulk-update-btn" id="bulk-update-btn" onclick="toggleBulkMode()">📋 Bulk Update</button>
+                <button class="bulk-update-btn" id="bulk-update-btn" onclick="toggleBulkMode()">📋 Mark Planning as Read</button>
             </div>
         </div>
 
@@ -1337,6 +1337,7 @@
         };
         let bulkModeActive = false;
         let selectedBooks = new Set();
+        let previousStatusFilter = 'all';
 
         const STORAGE_KEY = 'bookTracker_books';
 
@@ -2769,19 +2770,28 @@
             const actionBar = document.getElementById('bulk-action-bar');
 
             if (bulkModeActive) {
+                // Store current status filter
+                previousStatusFilter = currentFilters.status;
+
+                // Auto-filter to planning books
+                filterByStatus('planned');
+
                 btn.classList.add('active');
                 btn.textContent = '✓ Exit Bulk Mode';
+
                 // Set default date to current month
                 const now = new Date();
                 const currentMonth = now.toISOString().slice(0, 7);
                 document.getElementById('bulk-date-input').value = currentMonth;
             } else {
                 btn.classList.remove('active');
-                btn.textContent = '📋 Bulk Update';
+                btn.textContent = '📋 Mark Planning as Read';
                 actionBar.classList.remove('active');
+
+                // Restore previous status filter
+                filterByStatus(previousStatusFilter);
             }
 
-            renderBooks();
             updateSelectedCount();
         }
 
@@ -2853,10 +2863,11 @@
             const actionBar = document.getElementById('bulk-action-bar');
 
             btn.classList.remove('active');
-            btn.textContent = '📋 Bulk Update';
+            btn.textContent = '📋 Mark Planning as Read';
             actionBar.classList.remove('active');
 
-            renderBooks();
+            // Restore previous status filter
+            filterByStatus(previousStatusFilter);
         }
 
         // Update Existing Book Synopses
