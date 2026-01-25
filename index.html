@@ -960,6 +960,74 @@
             font-size: 1rem;
         }
 
+        /* Bulk Update Mode */
+        .bulk-update-btn {
+            background: var(--primary-color);
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .bulk-update-btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .bulk-update-btn.active {
+            background: #10b981;
+        }
+
+        .bulk-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+
+        .bulk-select-container {
+            display: none;
+            align-items: center;
+        }
+
+        .bulk-select-container.active {
+            display: flex;
+        }
+
+        .bulk-action-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            padding: 20px;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+            border-top: 2px solid var(--primary-color);
+            z-index: 100;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .bulk-action-bar.active {
+            display: flex;
+        }
+
+        .bulk-action-bar .selected-count {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .bulk-action-bar .btn {
+            margin: 0;
+        }
+
         /* Hidden utility */
         .hidden {
             display: none !important;
@@ -1077,11 +1145,20 @@
                     <option value="title">By Title</option>
                     <option value="author">By Author</option>
                 </select>
+                <button class="bulk-update-btn" id="bulk-update-btn" onclick="toggleBulkMode()">📋 Bulk Update</button>
             </div>
         </div>
 
         <!-- Books Container -->
         <div id="books-container"></div>
+
+        <!-- Bulk Action Bar -->
+        <div id="bulk-action-bar" class="bulk-action-bar">
+            <span class="selected-count"><span id="selected-count">0</span> book(s) selected</span>
+            <input type="month" id="bulk-date-input" class="form-input" style="width: auto; padding: 8px 12px;" />
+            <button class="btn btn-success" onclick="bulkMarkAsRead()">✓ Mark as Read</button>
+            <button class="btn btn-secondary" onclick="cancelBulkMode()">Cancel</button>
+        </div>
     </div>
 
     <!-- Add/Edit Modal -->
@@ -1250,6 +1327,8 @@
             search: '',
             sort: 'date-desc'
         };
+        let bulkModeActive = false;
+        let selectedBooks = new Set();
 
         const STORAGE_KEY = 'bookTracker_books';
 
@@ -2489,8 +2568,22 @@
             const truncatedSynopsis = synopsis.length > 150 ? synopsis.substring(0, 150) + '...' : synopsis;
             const needsToggle = synopsis.length > 150;
 
+            // Show checkbox only in bulk mode and for planning books
+            const showCheckbox = bulkModeActive && book.status === 'planned';
+            const isChecked = selectedBooks.has(book.id);
+
+            const checkboxHtml = showCheckbox
+                ? `<div class="bulk-select-container active">
+                       <input type="checkbox"
+                              class="bulk-checkbox"
+                              ${isChecked ? 'checked' : ''}
+                              onchange="toggleBookSelection('${book.id}')" />
+                   </div>`
+                : '';
+
             return `
                 <div class="book-card">
+                    ${checkboxHtml}
                     <div class="book-cover">${coverHtml}</div>
                     <div class="book-content-wrapper">
                         <div class="book-title">${escapeHtml(book.title)}</div>
@@ -2656,6 +2749,105 @@
 
         function handleSort() {
             currentFilters.sort = document.getElementById('sort-select').value;
+            renderBooks();
+        }
+
+        // Bulk Update Mode Functions
+        function toggleBulkMode() {
+            bulkModeActive = !bulkModeActive;
+            selectedBooks.clear();
+
+            const btn = document.getElementById('bulk-update-btn');
+            const actionBar = document.getElementById('bulk-action-bar');
+
+            if (bulkModeActive) {
+                btn.classList.add('active');
+                btn.textContent = '✓ Exit Bulk Mode';
+                // Set default date to current month
+                const now = new Date();
+                const currentMonth = now.toISOString().slice(0, 7);
+                document.getElementById('bulk-date-input').value = currentMonth;
+            } else {
+                btn.classList.remove('active');
+                btn.textContent = '📋 Bulk Update';
+                actionBar.classList.remove('active');
+            }
+
+            renderBooks();
+            updateSelectedCount();
+        }
+
+        function toggleBookSelection(bookId) {
+            if (selectedBooks.has(bookId)) {
+                selectedBooks.delete(bookId);
+            } else {
+                selectedBooks.add(bookId);
+            }
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            const count = selectedBooks.size;
+            document.getElementById('selected-count').textContent = count;
+
+            const actionBar = document.getElementById('bulk-action-bar');
+            if (count > 0 && bulkModeActive) {
+                actionBar.classList.add('active');
+            } else {
+                actionBar.classList.remove('active');
+            }
+        }
+
+        function bulkMarkAsRead() {
+            if (selectedBooks.size === 0) {
+                alert('Please select at least one book to update.');
+                return;
+            }
+
+            const dateRead = document.getElementById('bulk-date-input').value;
+            if (!dateRead) {
+                alert('Please select a date.');
+                return;
+            }
+
+            const confirmed = confirm(
+                `Mark ${selectedBooks.size} book(s) as read with date ${formatMonthYear(dateRead)}?\n\n` +
+                `This will update the status and date for all selected books.`
+            );
+
+            if (!confirmed) return;
+
+            let updatedCount = 0;
+
+            selectedBooks.forEach(bookId => {
+                const index = books.findIndex(b => b.id === bookId);
+                if (index !== -1) {
+                    books[index].status = 'read';
+                    books[index].dateRead = dateRead;
+                    updatedCount++;
+                }
+            });
+
+            if (saveBooks()) {
+                alert(`Successfully updated ${updatedCount} book(s) to "Read" status!`);
+                selectedBooks.clear();
+                cancelBulkMode();
+                updateStats();
+                renderBooks();
+            }
+        }
+
+        function cancelBulkMode() {
+            bulkModeActive = false;
+            selectedBooks.clear();
+
+            const btn = document.getElementById('bulk-update-btn');
+            const actionBar = document.getElementById('bulk-action-bar');
+
+            btn.classList.remove('active');
+            btn.textContent = '📋 Bulk Update';
+            actionBar.classList.remove('active');
+
             renderBooks();
         }
 
