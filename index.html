@@ -3318,8 +3318,10 @@
                 .map(([author]) => author);
 
             // Display insights
+            const currentYear = new Date().getFullYear();
             let insightsHTML = '<div style="margin-bottom: 24px;">';
             insightsHTML += '<h3 style="margin-bottom: 12px; color: var(--text-primary);">📊 Your Reading Profile</h3>';
+            insightsHTML += `<p style="margin-bottom: 12px; font-size: 14px; color: var(--text-secondary);">Showing contemporary books published in the last 5 years (${currentYear - 5}-${currentYear})</p>`;
             insightsHTML += '<div style="display: flex; gap: 16px; flex-wrap: wrap;">';
 
             if (topGenres.length > 0) {
@@ -3363,19 +3365,24 @@
             const recommendations = [];
             const alreadyHaveBooks = new Set(books.map(b => b.title.toLowerCase()));
 
+            // Calculate date range - last 5 years from current year
+            const currentYear = new Date().getFullYear();
+            const startYear = currentYear - 5;
+
             // Search by top genres
             for (const genre of topGenres.slice(0, 2)) {
                 try {
+                    // Add date filter to only get books from last 5 years or upcoming
                     const query = encodeURIComponent(`subject:${genre}`);
                     const response = await fetch(
-                        `https://www.googleapis.com/books/v1/volumes?q=${query}&orderBy=relevance&maxResults=5&printType=books&langRestrict=en`
+                        `https://www.googleapis.com/books/v1/volumes?q=${query}&orderBy=newest&maxResults=10&printType=books&langRestrict=en`
                     );
 
                     if (response.ok) {
                         const data = await response.json();
                         if (data.items) {
                             data.items.forEach(item => {
-                                const book = parseGoogleBook(item, genre);
+                                const book = parseGoogleBook(item, genre, startYear);
                                 if (book && !alreadyHaveBooks.has(book.title.toLowerCase())) {
                                     recommendations.push(book);
                                     alreadyHaveBooks.add(book.title.toLowerCase());
@@ -3393,14 +3400,14 @@
                 try {
                     const query = encodeURIComponent(`inauthor:"${author}"`);
                     const response = await fetch(
-                        `https://www.googleapis.com/books/v1/volumes?q=${query}&orderBy=relevance&maxResults=3&printType=books&langRestrict=en`
+                        `https://www.googleapis.com/books/v1/volumes?q=${query}&orderBy=newest&maxResults=5&printType=books&langRestrict=en`
                     );
 
                     if (response.ok) {
                         const data = await response.json();
                         if (data.items) {
                             data.items.forEach(item => {
-                                const book = parseGoogleBook(item, 'Various');
+                                const book = parseGoogleBook(item, 'Various', startYear);
                                 if (book && !alreadyHaveBooks.has(book.title.toLowerCase())) {
                                     recommendations.push(book);
                                     alreadyHaveBooks.add(book.title.toLowerCase());
@@ -3417,10 +3424,21 @@
             return recommendations.slice(0, 12);
         }
 
-        function parseGoogleBook(item, suggestedGenre) {
+        function parseGoogleBook(item, suggestedGenre, startYear) {
             const volumeInfo = item.volumeInfo;
 
             if (!volumeInfo || !volumeInfo.title) {
+                return null;
+            }
+
+            // Filter by publication date - only books from last 5 years or upcoming
+            if (volumeInfo.publishedDate) {
+                const publishYear = parseInt(volumeInfo.publishedDate.substring(0, 4));
+                if (publishYear < startYear) {
+                    return null; // Skip books older than 5 years
+                }
+            } else {
+                // Skip books without publication date to ensure quality
                 return null;
             }
 
@@ -3429,7 +3447,8 @@
                 author: volumeInfo.authors ? volumeInfo.authors[0] : 'Unknown Author',
                 genre: suggestedGenre,
                 cover: volumeInfo.imageLinks?.thumbnail || volumeInfo.imageLinks?.smallThumbnail || '',
-                description: volumeInfo.description ? volumeInfo.description.substring(0, 200) + '...' : 'No description available.'
+                description: volumeInfo.description ? volumeInfo.description.substring(0, 200) + '...' : 'No description available.',
+                publishedDate: volumeInfo.publishedDate
             };
         }
 
@@ -3450,7 +3469,10 @@
                     <div class="recommendation-info">
                         <h3 class="recommendation-title">${escapeHtml(book.title)}</h3>
                         <p class="recommendation-author">by ${escapeHtml(book.author)}</p>
-                        <span class="recommendation-genre">${escapeHtml(book.genre)}</span>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
+                            <span class="recommendation-genre">${escapeHtml(book.genre)}</span>
+                            ${book.publishedDate ? `<span style="font-size: 12px; color: var(--text-secondary); padding: 4px 8px; background: var(--background); border-radius: 4px; border: 1px solid var(--border-color);">📅 ${escapeHtml(book.publishedDate.substring(0, 4))}</span>` : ''}
+                        </div>
                         <p style="margin-top: 12px; font-size: 14px; color: var(--text-secondary); line-height: 1.5;">${escapeHtml(book.description)}</p>
                     </div>
                     <div class="recommendation-actions">
