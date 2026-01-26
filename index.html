@@ -1036,6 +1036,139 @@
             margin: 0;
         }
 
+        /* Recommendations */
+        .recommendations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .recommendation-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .recommendation-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--primary-color);
+        }
+
+        .recommendation-cover {
+            width: 100%;
+            height: 200px;
+            background: var(--background);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .recommendation-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .recommendation-info {
+            padding: 15px;
+        }
+
+        .recommendation-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 5px;
+            line-height: 1.4;
+        }
+
+        .recommendation-author {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .recommendation-genre {
+            display: inline-block;
+            padding: 4px 8px;
+            background: var(--background);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+
+        .recommendation-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .recommendation-actions .btn {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 0.875rem;
+        }
+
+        .recommendation-loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .recommendation-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        .recommendation-empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .recommendation-empty-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .recommendation-insights {
+            background: var(--background);
+            padding: 20px;
+            border-radius: var(--radius);
+            margin-bottom: 20px;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .recommendation-insights h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+        }
+
+        .recommendation-insights ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .recommendation-insights li {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            padding: 5px 0;
+        }
+
         /* Hidden utility */
         .hidden {
             display: none !important;
@@ -1113,6 +1246,7 @@
             <div class="header-actions">
                 <button class="btn btn-primary" onclick="openAddModal()">+ Add Book</button>
                 <button class="btn btn-secondary" onclick="openReportsModal()">📊 Reports</button>
+                <button class="btn btn-secondary" onclick="openRecommendationsModal()">💡 Get Recommendations</button>
                 <button class="btn btn-secondary" onclick="exportBooks()">
                     💾 Export Backup
                 </button>
@@ -1319,6 +1453,34 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="exportReportData()">💾 Export Report</button>
                 <button type="button" class="btn btn-primary" onclick="closeReportsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recommendations Modal -->
+    <div id="recommendations-modal" class="modal">
+        <div class="modal-content" style="max-width: 1000px;">
+            <div class="modal-header">
+                <h2>💡 Personalized Reading Recommendations</h2>
+                <span class="close" onclick="closeRecommendationsModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="recommendation-insights" id="recommendation-insights"></div>
+                <div id="recommendations-container">
+                    <div class="recommendation-loading" id="recommendations-loading">
+                        <div class="recommendation-spinner"></div>
+                        <p>Analyzing your reading history...</p>
+                    </div>
+                    <div class="recommendations-grid" id="recommendations-grid" style="display: none;"></div>
+                    <div class="recommendation-empty" id="recommendations-empty" style="display: none;">
+                        <p>📚 No recommendations available yet.</p>
+                        <p>Add more books to your "Read" list to get personalized suggestions!</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="generateRecommendations()">🔄 Refresh</button>
+                <button type="button" class="btn btn-primary" onclick="closeRecommendationsModal()">Close</button>
             </div>
         </div>
     </div>
@@ -3091,6 +3253,249 @@
                 closeReportsModal();
             }
         });
+
+        document.getElementById('recommendations-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeRecommendationsModal();
+            }
+        });
+
+        // Recommendations Feature
+        function openRecommendationsModal() {
+            document.getElementById('recommendations-modal').style.display = 'block';
+            generateRecommendations();
+        }
+
+        function closeRecommendationsModal() {
+            document.getElementById('recommendations-modal').style.display = 'none';
+        }
+
+        async function generateRecommendations() {
+            const loadingEl = document.getElementById('recommendations-loading');
+            const gridEl = document.getElementById('recommendations-grid');
+            const emptyEl = document.getElementById('recommendations-empty');
+            const insightsEl = document.getElementById('recommendation-insights');
+
+            // Show loading state
+            loadingEl.style.display = 'block';
+            gridEl.style.display = 'none';
+            emptyEl.style.display = 'none';
+            insightsEl.innerHTML = '';
+
+            // Get read books to analyze
+            const readBooks = books.filter(b => b.status === 'read');
+
+            if (readBooks.length === 0) {
+                loadingEl.style.display = 'none';
+                emptyEl.style.display = 'block';
+                return;
+            }
+
+            // Analyze reading preferences
+            const genreCounts = {};
+            const authorCounts = {};
+
+            readBooks.forEach(book => {
+                // Count genres
+                if (book.genre && book.genre !== 'Other') {
+                    genreCounts[book.genre] = (genreCounts[book.genre] || 0) + 1;
+                }
+                // Count authors
+                if (book.author) {
+                    authorCounts[book.author] = (authorCounts[book.author] || 0) + 1;
+                }
+            });
+
+            // Get top genres and authors
+            const topGenres = Object.entries(genreCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3)
+                .map(([genre]) => genre);
+
+            const topAuthors = Object.entries(authorCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3)
+                .map(([author]) => author);
+
+            // Display insights
+            let insightsHTML = '<div style="margin-bottom: 24px;">';
+            insightsHTML += '<h3 style="margin-bottom: 12px; color: var(--text-primary);">📊 Your Reading Profile</h3>';
+            insightsHTML += '<div style="display: flex; gap: 16px; flex-wrap: wrap;">';
+
+            if (topGenres.length > 0) {
+                insightsHTML += `<div style="flex: 1; min-width: 200px; padding: 12px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border-color);">`;
+                insightsHTML += `<strong>Top Genres:</strong><br>${topGenres.join(', ')}`;
+                insightsHTML += `</div>`;
+            }
+
+            if (topAuthors.length > 0) {
+                insightsHTML += `<div style="flex: 1; min-width: 200px; padding: 12px; background: var(--card-bg); border-radius: 8px; border: 1px solid var(--border-color);">`;
+                insightsHTML += `<strong>Favorite Authors:</strong><br>${topAuthors.join(', ')}`;
+                insightsHTML += `</div>`;
+            }
+
+            insightsHTML += '</div></div>';
+            insightsEl.innerHTML = insightsHTML;
+
+            // Fetch recommendations from Google Books API
+            try {
+                const recommendations = await fetchBookRecommendations(topGenres, topAuthors);
+
+                if (recommendations.length === 0) {
+                    loadingEl.style.display = 'none';
+                    emptyEl.style.display = 'block';
+                    return;
+                }
+
+                // Display recommendations
+                displayRecommendations(recommendations);
+                loadingEl.style.display = 'none';
+                gridEl.style.display = 'grid';
+            } catch (error) {
+                console.error('Error fetching recommendations:', error);
+                loadingEl.style.display = 'none';
+                emptyEl.style.display = 'block';
+                emptyEl.innerHTML = '<p>⚠️ Unable to fetch recommendations at this time.</p><p>Please try again later.</p>';
+            }
+        }
+
+        async function fetchBookRecommendations(topGenres, topAuthors) {
+            const recommendations = [];
+            const alreadyHaveBooks = new Set(books.map(b => b.title.toLowerCase()));
+
+            // Search by top genres
+            for (const genre of topGenres.slice(0, 2)) {
+                try {
+                    const query = encodeURIComponent(`subject:${genre}`);
+                    const response = await fetch(
+                        `https://www.googleapis.com/books/v1/volumes?q=${query}&orderBy=relevance&maxResults=5&printType=books&langRestrict=en`
+                    );
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.items) {
+                            data.items.forEach(item => {
+                                const book = parseGoogleBook(item, genre);
+                                if (book && !alreadyHaveBooks.has(book.title.toLowerCase())) {
+                                    recommendations.push(book);
+                                    alreadyHaveBooks.add(book.title.toLowerCase());
+                                }
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error fetching books for genre ${genre}:`, error);
+                }
+            }
+
+            // Search by top authors
+            for (const author of topAuthors.slice(0, 1)) {
+                try {
+                    const query = encodeURIComponent(`inauthor:"${author}"`);
+                    const response = await fetch(
+                        `https://www.googleapis.com/books/v1/volumes?q=${query}&orderBy=relevance&maxResults=3&printType=books&langRestrict=en`
+                    );
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.items) {
+                            data.items.forEach(item => {
+                                const book = parseGoogleBook(item, 'Various');
+                                if (book && !alreadyHaveBooks.has(book.title.toLowerCase())) {
+                                    recommendations.push(book);
+                                    alreadyHaveBooks.add(book.title.toLowerCase());
+                                }
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error fetching books for author ${author}:`, error);
+                }
+            }
+
+            // Remove duplicates and limit to 12 recommendations
+            return recommendations.slice(0, 12);
+        }
+
+        function parseGoogleBook(item, suggestedGenre) {
+            const volumeInfo = item.volumeInfo;
+
+            if (!volumeInfo || !volumeInfo.title) {
+                return null;
+            }
+
+            return {
+                title: volumeInfo.title,
+                author: volumeInfo.authors ? volumeInfo.authors[0] : 'Unknown Author',
+                genre: suggestedGenre,
+                cover: volumeInfo.imageLinks?.thumbnail || volumeInfo.imageLinks?.smallThumbnail || '',
+                description: volumeInfo.description ? volumeInfo.description.substring(0, 200) + '...' : 'No description available.'
+            };
+        }
+
+        function displayRecommendations(recommendations) {
+            const gridEl = document.getElementById('recommendations-grid');
+
+            gridEl.innerHTML = recommendations.map(book => `
+                <div class="recommendation-card">
+                    ${book.cover ? `
+                        <div class="recommendation-cover">
+                            <img src="${escapeHtml(book.cover)}" alt="${escapeHtml(book.title)}" onerror="this.parentElement.innerHTML='<div style=\\'background: var(--primary-color); color: white; display: flex; align-items: center; justify-content: center; height: 100%; font-size: 48px;\\'>📚</div>'">
+                        </div>
+                    ` : `
+                        <div class="recommendation-cover">
+                            <div style="background: var(--primary-color); color: white; display: flex; align-items: center; justify-content: center; height: 100%; font-size: 48px;">📚</div>
+                        </div>
+                    `}
+                    <div class="recommendation-info">
+                        <h3 class="recommendation-title">${escapeHtml(book.title)}</h3>
+                        <p class="recommendation-author">by ${escapeHtml(book.author)}</p>
+                        <span class="recommendation-genre">${escapeHtml(book.genre)}</span>
+                        <p style="margin-top: 12px; font-size: 14px; color: var(--text-secondary); line-height: 1.5;">${escapeHtml(book.description)}</p>
+                    </div>
+                    <div class="recommendation-actions">
+                        <button class="btn btn-primary" onclick='addRecommendationToPlanning(${JSON.stringify(escapeHtml(book.title))}, ${JSON.stringify(escapeHtml(book.author))}, ${JSON.stringify(escapeHtml(book.genre))})'>
+                            ➕ Add to Planning
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function addRecommendationToPlanning(title, author, genre) {
+            // Check if book already exists
+            const existingBook = books.find(b =>
+                b.title.toLowerCase() === title.toLowerCase() &&
+                b.author.toLowerCase() === author.toLowerCase()
+            );
+
+            if (existingBook) {
+                alert(`"${title}" is already in your library!`);
+                return;
+            }
+
+            // Add new book to planning
+            const newBook = {
+                id: Date.now(),
+                title: title,
+                author: author,
+                genre: genre,
+                format: 'Paperback',
+                status: 'planned',
+                dateAdded: getCurrentMonthYear(),
+                dateRead: '',
+                notes: 'Recommended based on reading history'
+            };
+
+            books.push(newBook);
+            saveBooks();
+            renderBooks();
+
+            alert(`✓ "${title}" has been added to your Planning list!`);
+
+            // Close recommendations modal
+            closeRecommendationsModal();
+        }
 
         // Initialize app
         init();
