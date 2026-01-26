@@ -2828,18 +2828,29 @@
                 return;
             }
 
+            // Collect book titles for confirmation
+            const bookTitles = [];
+            selectedBooks.forEach(bookId => {
+                const book = books.find(b => b.id === bookId);
+                if (book) {
+                    bookTitles.push(`• ${book.title}`);
+                }
+            });
+
             const confirmed = confirm(
                 `Mark ${selectedBooks.size} book(s) as read with date ${formatMonthYear(dateRead)}?\n\n` +
-                `This will update the status and date for all selected books.`
+                `Books to update:\n${bookTitles.join('\n')}`
             );
 
             if (!confirmed) return;
 
             let updatedCount = 0;
+            const updatedTitles = [];
 
             selectedBooks.forEach(bookId => {
                 const index = books.findIndex(b => b.id === bookId);
                 if (index !== -1) {
+                    updatedTitles.push(`• ${books[index].title}`);
                     books[index].status = 'read';
                     books[index].dateRead = dateRead;
                     updatedCount++;
@@ -2847,7 +2858,11 @@
             });
 
             if (saveBooks()) {
-                alert(`Successfully updated ${updatedCount} book(s) to "Read" status!`);
+                alert(
+                    `✓ Successfully updated ${updatedCount} book(s) to "Read" status!\n\n` +
+                    `Books marked as read:\n${updatedTitles.join('\n')}\n\n` +
+                    `Date: ${formatMonthYear(dateRead)}`
+                );
                 selectedBooks.clear();
                 cancelBulkMode();
                 updateStats();
