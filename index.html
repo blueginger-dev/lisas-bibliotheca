@@ -3321,7 +3321,7 @@
             const currentYear = new Date().getFullYear();
             let insightsHTML = '<div style="margin-bottom: 24px;">';
             insightsHTML += '<h3 style="margin-bottom: 12px; color: var(--text-primary);">📊 Your Reading Profile</h3>';
-            insightsHTML += `<p style="margin-bottom: 12px; font-size: 14px; color: var(--text-secondary);">Showing contemporary books published in the last 5 years (${currentYear - 5}-${currentYear})</p>`;
+            insightsHTML += `<p style="margin-bottom: 12px; font-size: 14px; color: var(--text-secondary);">Showing English-language books published in the last 5 years (${currentYear - 5}-${currentYear})</p>`;
             insightsHTML += '<div style="display: flex; gap: 16px; flex-wrap: wrap;">';
 
             if (topGenres.length > 0) {
@@ -3429,6 +3429,11 @@
 
             if (!volumeInfo || !volumeInfo.title) {
                 return null;
+            }
+
+            // Filter by language - English only
+            if (!volumeInfo.language || volumeInfo.language !== 'en') {
+                return null; // Skip non-English books
             }
 
             // Filter by publication date - only books from last 5 years or upcoming
