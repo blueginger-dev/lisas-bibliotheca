@@ -724,6 +724,39 @@
             color: white;
         }
 
+        .cover-paste-zone {
+            margin-top: 10px;
+            width: 100%;
+            min-height: 120px;
+            border: 2px dashed var(--border-color);
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+            background: var(--background);
+            position: relative;
+        }
+
+        .cover-paste-zone:hover,
+        .cover-paste-zone:focus {
+            border-color: var(--primary-color);
+            background: rgba(99, 102, 241, 0.05);
+            outline: none;
+        }
+
+        .cover-paste-zone .paste-hint {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            text-align: center;
+            padding: 10px;
+        }
+
+        .cover-paste-zone.has-preview .paste-hint {
+            display: none;
+        }
+
         .cover-preview {
             margin-top: 10px;
             width: 120px;
@@ -734,6 +767,10 @@
             display: flex;
             align-items: center;
             justify-content: center;
+        }
+
+        .cover-paste-zone .cover-preview {
+            margin-top: 0;
         }
 
         .cover-preview img {
@@ -1355,10 +1392,13 @@
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Cover Image URL (optional)</label>
-                        <input type="url" id="input-cover" class="form-input" placeholder="https://..." oninput="previewCover()">
-                        <div class="cover-preview hidden" id="cover-preview">
-                            <img id="preview-img" src="" alt="Cover preview">
+                        <label class="form-label">Cover Image (optional)</label>
+                        <input type="text" id="input-cover" class="form-input" placeholder="https://... or paste image below" oninput="previewCover()">
+                        <div class="cover-paste-zone" id="cover-paste-zone" tabindex="0">
+                            <span class="paste-hint">Paste an image here (Ctrl+V)</span>
+                            <div class="cover-preview hidden" id="cover-preview">
+                                <img id="preview-img" src="" alt="Cover preview">
+                            </div>
                         </div>
                     </div>
 
@@ -2338,17 +2378,47 @@
             const url = document.getElementById('input-cover').value.trim();
             const preview = document.getElementById('cover-preview');
             const img = document.getElementById('preview-img');
+            const pasteZone = document.getElementById('cover-paste-zone');
 
             if (url) {
                 img.src = url;
                 preview.classList.remove('hidden');
+                pasteZone.classList.add('has-preview');
                 img.onerror = () => {
                     preview.classList.add('hidden');
+                    pasteZone.classList.remove('has-preview');
                 };
             } else {
                 preview.classList.add('hidden');
+                pasteZone.classList.remove('has-preview');
             }
         }
+
+        function handleCoverPaste(event) {
+            const items = event.clipboardData && event.clipboardData.items;
+            if (!items) return;
+
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    event.preventDefault();
+                    const blob = item.getAsFile();
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        document.getElementById('input-cover').value = e.target.result;
+                        previewCover();
+                    };
+                    reader.readAsDataURL(blob);
+                    return;
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const pasteZone = document.getElementById('cover-paste-zone');
+            if (pasteZone) {
+                pasteZone.addEventListener('paste', handleCoverPaste);
+            }
+        });
 
         function updateCharCount() {
             const textarea = document.getElementById('input-synopsis');
