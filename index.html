@@ -1349,7 +1349,8 @@
 
                     <div class="form-group">
                         <label class="form-label">Genre <span class="required">*</span></label>
-                        <input type="text" id="input-genre" class="form-input" required placeholder="e.g., Fiction, Mystery, Sci-Fi">
+                        <input type="text" id="input-genre" class="form-input" required placeholder="e.g., Fiction, Mystery, Sci-Fi" list="genre-suggestions" autocomplete="off">
+                        <datalist id="genre-suggestions"></datalist>
                         <div class="error-message hidden" id="error-genre">Genre is required</div>
                     </div>
 
@@ -1792,6 +1793,7 @@
             document.getElementById('input-date').value = currentMonth;
 
             document.getElementById('book-modal').classList.add('active');
+            updateGenreSuggestions();
 
             // Scroll modal to top and focus title field
             setTimeout(() => {
@@ -1827,6 +1829,7 @@
             }
 
             document.getElementById('book-modal').classList.add('active');
+            updateGenreSuggestions();
 
             // Scroll modal to top
             setTimeout(() => {
@@ -3225,6 +3228,17 @@
             }
 
             return streak;
+        }
+
+        function updateGenreSuggestions() {
+            const genres = new Set(books.map(b => b.genre).filter(Boolean));
+            const datalist = document.getElementById('genre-suggestions');
+            datalist.innerHTML = '';
+            Array.from(genres).sort().forEach(genre => {
+                const option = document.createElement('option');
+                option.value = genre;
+                datalist.appendChild(option);
+            });
         }
 
         function updateGenreFilter() {
