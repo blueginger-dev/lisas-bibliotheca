@@ -637,6 +637,88 @@
             text-align: center;
         }
 
+        .lookup-buttons {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .api-key-toggle {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            cursor: pointer;
+            padding: 8px 10px;
+            font-size: 1rem;
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+
+        .api-key-toggle:hover {
+            background: var(--border);
+            color: var(--text-primary);
+        }
+
+        .api-key-section {
+            display: none;
+            margin-top: 12px;
+            padding: 12px;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            text-align: left;
+        }
+
+        .api-key-section.visible {
+            display: block;
+        }
+
+        .api-key-section label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .api-key-row {
+            display: flex;
+            gap: 6px;
+        }
+
+        .api-key-row input {
+            flex: 1;
+            padding: 6px 10px;
+            font-size: 0.85rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-family: monospace;
+        }
+
+        .api-key-row button {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            background: var(--primary);
+            color: white;
+        }
+
+        .api-key-row button:hover {
+            opacity: 0.9;
+        }
+
+        .api-key-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+
+        .api-key-hint a {
+            color: var(--primary);
+        }
+
         .lookup-btn {
             background: #10b981;
             color: white;
@@ -1361,9 +1443,23 @@
                     </div>
 
                     <div class="lookup-section">
-                        <button type="button" class="btn lookup-btn" onclick="lookupBookInfo()" id="lookup-btn">
-                            🔍 Auto-fill Book Info
-                        </button>
+                        <div class="lookup-buttons">
+                            <button type="button" class="btn lookup-btn" onclick="lookupBookInfo()" id="lookup-btn">
+                                🔍 Auto-fill Book Info
+                            </button>
+                            <button type="button" class="api-key-toggle" onclick="toggleApiKeySection()" title="Google Books API key settings">⚙</button>
+                        </div>
+                        <div class="api-key-section" id="api-key-section">
+                            <label>Google Books API Key (optional — avoids rate limits)</label>
+                            <div class="api-key-row">
+                                <input type="text" id="api-key-input" placeholder="Enter your API key" spellcheck="false">
+                                <button type="button" onclick="saveApiKey()">Save</button>
+                                <button type="button" onclick="clearApiKey()" style="background:#ef4444;">Clear</button>
+                            </div>
+                            <div class="api-key-hint">
+                                Free: 1,000 lookups/day. Get a key at <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a> → enable Books API → create API key.
+                            </div>
+                        </div>
                         <div class="lookup-status" id="lookup-status"></div>
                     </div>
 
@@ -2415,7 +2511,14 @@
                 showLookupStatus('error', 'Book not found in 5 databases. Please fill details manually.');
             } catch (error) {
                 console.error('Lookup error:', error);
-                showLookupStatus('error', 'Search error occurred. Please try again or fill manually.');
+                if (error.message === 'RATE_LIMITED') {
+                    const hasKey = !!localStorage.getItem('googleBooksApiKey');
+                    showLookupStatus('error', hasKey
+                        ? 'Google Books API daily limit reached. Try again tomorrow or fill manually.'
+                        : 'Google Books API rate limited. Add your own API key (click ⚙ next to Auto-fill) for 1,000 free lookups/day.');
+                } else {
+                    showLookupStatus('error', 'Search error occurred. Please try again or fill manually.');
+                }
             } finally {
                 lookupBtn.disabled = false;
             }
@@ -2425,9 +2528,16 @@
         async function searchGoogleBooks(title, author) {
             try {
                 const query = `intitle:${encodeURIComponent(title)}+inauthor:${encodeURIComponent(author)}`;
-                const url = `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`;
+                const apiKey = localStorage.getItem('googleBooksApiKey') || '';
+                const keyParam = apiKey ? `&key=${encodeURIComponent(apiKey)}` : '';
+                const url = `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1${keyParam}`;
 
                 const response = await fetch(url);
+                if (response.status === 429) {
+                    console.warn('Google Books API rate limited');
+                    throw new Error('RATE_LIMITED');
+                }
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
 
                 if (data.items && data.items.length > 0) {
@@ -2439,6 +2549,7 @@
                     };
                 }
             } catch (error) {
+                if (error.message === 'RATE_LIMITED') throw error;
                 console.error('Google Books error:', error);
             }
             return null;
@@ -2449,13 +2560,21 @@
             try {
                 // Search by title and author
                 const query = `title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}`;
-                const url = `https://openlibrary.org/search.json?${query}&limit=1`;
+                const url = `https://openlibrary.org/search.json?${query}&limit=3`;
 
                 const response = await fetch(url);
                 const data = await response.json();
 
                 if (data.docs && data.docs.length > 0) {
-                    const book = data.docs[0];
+                    // Try to find the best match by title similarity
+                    const targetTitle = title.toLowerCase();
+                    let book = data.docs[0];
+                    for (const doc of data.docs) {
+                        if (doc.title && doc.title.toLowerCase() === targetTitle) {
+                            book = doc;
+                            break;
+                        }
+                    }
 
                     // Get book details including cover
                     let coverUrl = null;
@@ -2475,7 +2594,7 @@
                         synopsis = book.first_sentence[0];
                     }
 
-                    // If we have a work key, try to get full description
+                    // If we have a work key, try to get full description and cover from editions
                     if (book.key) {
                         try {
                             const workUrl = `https://openlibrary.org${book.key}.json`;
@@ -2489,16 +2608,18 @@
                                     synopsis = summarizeSynopsis(workData.description.value);
                                 }
                             }
+
+                            // If no cover yet, try to get one from editions
+                            if (!coverUrl && workData.covers && workData.covers.length > 0) {
+                                coverUrl = `https://covers.openlibrary.org/b/id/${workData.covers[0]}-L.jpg`;
+                            }
                         } catch (e) {
-                            // If work detail fetch fails, continue with what we have
                             console.log('Could not fetch work details:', e);
                         }
                     }
 
-                    // Return data if we have at least something useful
-                    if (coverUrl || genre || synopsis) {
-                        return { genre, coverUrl, synopsis };
-                    }
+                    // Return data if we found a matching book - even partial data is useful
+                    return { genre, coverUrl, synopsis };
                 }
             } catch (error) {
                 console.error('Open Library error:', error);
@@ -2549,9 +2670,16 @@
             try {
                 // Try a more flexible search - just combine title and author
                 const query = encodeURIComponent(`${title} ${author}`);
-                const url = `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=3`;
+                const apiKey = localStorage.getItem('googleBooksApiKey') || '';
+                const keyParam = apiKey ? `&key=${encodeURIComponent(apiKey)}` : '';
+                const url = `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=3${keyParam}`;
 
                 const response = await fetch(url);
+                if (response.status === 429) {
+                    console.warn('Google Books API rate limited (broad)');
+                    throw new Error('RATE_LIMITED');
+                }
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
 
                 if (data.items && data.items.length > 0) {
@@ -2572,6 +2700,7 @@
                     }
                 }
             } catch (error) {
+                if (error.message === 'RATE_LIMITED') throw error;
                 console.error('Google Books Broad error:', error);
             }
             return null;
@@ -2582,9 +2711,16 @@
             try {
                 // Try Google Books with just the title
                 const query = `intitle:${encodeURIComponent(title)}`;
-                const url = `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`;
+                const apiKey = localStorage.getItem('googleBooksApiKey') || '';
+                const keyParam = apiKey ? `&key=${encodeURIComponent(apiKey)}` : '';
+                const url = `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1${keyParam}`;
 
                 const response = await fetch(url);
+                if (response.status === 429) {
+                    console.warn('Google Books API rate limited (title-only)');
+                    throw new Error('RATE_LIMITED');
+                }
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const data = await response.json();
 
                 if (data.items && data.items.length > 0) {
@@ -2596,6 +2732,7 @@
                     };
                 }
             } catch (error) {
+                if (error.message === 'RATE_LIMITED') throw error;
                 console.error('Title-only search error:', error);
             }
             return null;
@@ -2627,13 +2764,42 @@
             statusEl.className = 'lookup-status ' + type;
             statusEl.innerHTML = message;
 
-            // Auto-hide success/error messages after 5 seconds
+            // Auto-hide success/error messages (longer for errors with actionable info)
             if (type !== 'loading') {
+                const delay = type === 'error' ? 8000 : 5000;
                 setTimeout(() => {
                     statusEl.className = 'lookup-status';
                     statusEl.innerHTML = '';
-                }, 5000);
+                }, delay);
             }
+        }
+
+        // API Key Management
+        function toggleApiKeySection() {
+            const section = document.getElementById('api-key-section');
+            section.classList.toggle('visible');
+            if (section.classList.contains('visible')) {
+                const saved = localStorage.getItem('googleBooksApiKey') || '';
+                document.getElementById('api-key-input').value = saved;
+            }
+        }
+
+        function saveApiKey() {
+            const key = document.getElementById('api-key-input').value.trim();
+            if (key) {
+                localStorage.setItem('googleBooksApiKey', key);
+                showLookupStatus('success', '✓ API key saved');
+                document.getElementById('api-key-section').classList.remove('visible');
+            } else {
+                showLookupStatus('error', 'Please enter a valid API key');
+            }
+        }
+
+        function clearApiKey() {
+            localStorage.removeItem('googleBooksApiKey');
+            document.getElementById('api-key-input').value = '';
+            showLookupStatus('success', '✓ API key removed');
+            document.getElementById('api-key-section').classList.remove('visible');
         }
 
         // Smart Synopsis Summarization
@@ -3370,12 +3536,14 @@
             const startYear = currentYear - 5;
 
             // Search by top genres
+            const recApiKey = localStorage.getItem('googleBooksApiKey') || '';
+            const recKeyParam = recApiKey ? `&key=${encodeURIComponent(recApiKey)}` : '';
             for (const genre of topGenres.slice(0, 2)) {
                 try {
                     // Add date filter to only get books from last 5 years or upcoming
                     const query = encodeURIComponent(`subject:${genre}`);
                     const response = await fetch(
-                        `https://www.googleapis.com/books/v1/volumes?q=${query}&orderBy=newest&maxResults=10&printType=books&langRestrict=en`
+                        `https://www.googleapis.com/books/v1/volumes?q=${query}&orderBy=newest&maxResults=10&printType=books&langRestrict=en${recKeyParam}`
                     );
 
                     if (response.ok) {
@@ -3400,7 +3568,7 @@
                 try {
                     const query = encodeURIComponent(`inauthor:"${author}"`);
                     const response = await fetch(
-                        `https://www.googleapis.com/books/v1/volumes?q=${query}&orderBy=newest&maxResults=5&printType=books&langRestrict=en`
+                        `https://www.googleapis.com/books/v1/volumes?q=${query}&orderBy=newest&maxResults=5&printType=books&langRestrict=en${recKeyParam}`
                     );
 
                     if (response.ok) {
