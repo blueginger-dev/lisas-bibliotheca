@@ -2440,21 +2440,21 @@
             lookupBtn.disabled = true;
 
             try {
-                // Try 1: Google Books API (strict search)
-                showLookupStatus('loading', '<span class="spinner"></span>Searching Google Books...');
-                const googleResult = await searchGoogleBooks(title, author);
-                if (googleResult) {
-                    populateBookData(googleResult);
-                    showLookupStatus('success', '✓ Book info found (Google Books)');
-                    return;
-                }
-
-                // Try 2: Open Library API
+                // Try 1: Open Library (no rate limits, field-based matching)
                 showLookupStatus('loading', '<span class="spinner"></span>Searching Open Library...');
                 const openLibResult = await searchOpenLibrary(title, author);
                 if (openLibResult) {
                     populateBookData(openLibResult);
                     showLookupStatus('success', '✓ Book info found (Open Library)');
+                    return;
+                }
+
+                // Try 2: Google Books (broad search with title validation)
+                showLookupStatus('loading', '<span class="spinner"></span>Searching Google Books...');
+                const googleBroadResult = await searchGoogleBooksBroad(title, author);
+                if (googleBroadResult) {
+                    populateBookData(googleBroadResult);
+                    showLookupStatus('success', '✓ Book info found (Google Books)');
                     return;
                 }
 
@@ -2467,16 +2467,7 @@
                     return;
                 }
 
-                // Try 4: Google Books (broader search)
-                showLookupStatus('loading', '<span class="spinner"></span>Trying broader search...');
-                const googleBroadResult = await searchGoogleBooksBroad(title, author);
-                if (googleBroadResult) {
-                    populateBookData(googleBroadResult);
-                    showLookupStatus('success', '✓ Book info found (Broad Search)');
-                    return;
-                }
-
-                // Try 5: Title-only search as last resort
+                // Try 4: Title-only search as last resort
                 showLookupStatus('loading', '<span class="spinner"></span>Final search attempt...');
                 const titleOnlyResult = await searchByTitleOnly(title);
                 if (titleOnlyResult) {
@@ -2486,7 +2477,7 @@
                 }
 
                 // No results from any API
-                showLookupStatus('error', 'Book not found in 5 databases. Please fill details manually.');
+                showLookupStatus('error', 'Book not found in 4 databases. Please fill details manually.');
             } catch (error) {
                 console.error('Lookup error:', error);
                 if (error.message === 'RATE_LIMITED') {
@@ -2497,35 +2488,6 @@
             } finally {
                 lookupBtn.disabled = false;
             }
-        }
-
-        // Search Google Books API
-        async function searchGoogleBooks(title, author) {
-            try {
-                const query = `intitle:${encodeURIComponent(title)}+inauthor:${encodeURIComponent(author)}`;
-                const url = `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`;
-
-                const response = await fetch(url);
-                if (response.status === 429) {
-                    console.warn('Google Books API rate limited');
-                    throw new Error('RATE_LIMITED');
-                }
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const data = await response.json();
-
-                if (data.items && data.items.length > 0) {
-                    const book = data.items[0].volumeInfo;
-                    return {
-                        genre: book.categories ? book.categories[0] : null,
-                        coverUrl: book.imageLinks ? (book.imageLinks.thumbnail || book.imageLinks.smallThumbnail) : null,
-                        synopsis: book.description ? summarizeSynopsis(book.description) : null
-                    };
-                }
-            } catch (error) {
-                if (error.message === 'RATE_LIMITED') throw error;
-                console.error('Google Books error:', error);
-            }
-            return null;
         }
 
         // Search Open Library API
@@ -3231,16 +3193,16 @@
         // Helper function to fetch book data for updates
         async function fetchBookDataForUpdate(title, author) {
             try {
-                // Try Google Books first
-                const googleResult = await searchGoogleBooks(title, author);
-                if (googleResult && googleResult.synopsis) {
-                    return googleResult;
-                }
-
-                // Try Open Library
+                // Try Open Library first
                 const openLibResult = await searchOpenLibrary(title, author);
                 if (openLibResult && openLibResult.synopsis) {
                     return openLibResult;
+                }
+
+                // Try Google Books
+                const googleResult = await searchGoogleBooksBroad(title, author);
+                if (googleResult && googleResult.synopsis) {
+                    return googleResult;
                 }
 
                 // Try Internet Archive
